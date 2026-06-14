@@ -52,6 +52,27 @@ func GetTopUpInfo(c *gin.Context) {
 		}
 	}
 
+	// 如果启用了官方支付宝当面付，添加到支付方法列表（不依赖旧易支付配置）。
+	enableAlipayNative := isAlipayNativeTopUpEnabled()
+	if enableAlipayNative {
+		hasAlipayNative := false
+		for _, method := range payMethods {
+			if method["type"] == model.PaymentMethodAlipayNative {
+				hasAlipayNative = true
+				break
+			}
+		}
+
+		if !hasAlipayNative {
+			payMethods = append(payMethods, map[string]string{
+				"name":      "支付宝充值",
+				"type":      model.PaymentMethodAlipayNative,
+				"color":     "rgba(var(--semi-blue-5), 1)",
+				"min_topup": strconv.FormatInt(getAlipayNativeMinTopUp(), 10),
+			})
+		}
+	}
+
 	// Waffo Pancake displayed above the legacy Waffo gateway.
 	enableWaffoPancake := isWaffoPancakeTopUpEnabled()
 	if enableWaffoPancake {
@@ -95,10 +116,16 @@ func GetTopUpInfo(c *gin.Context) {
 		}
 	}
 
+	effectiveMinTopUp := operation_setting.MinTopUp
+	if !isEpayTopUpEnabled() && enableAlipayNative {
+		effectiveMinTopUp = int(getAlipayNativeMinTopUp())
+	}
+
 	data := gin.H{
-		"enable_online_topup":              isEpayTopUpEnabled(),
+		"enable_online_topup":              isEpayTopUpEnabled() || enableAlipayNative,
 		"enable_stripe_topup":              isStripeTopUpEnabled(),
 		"enable_creem_topup":               isCreemTopUpEnabled(),
+		"enable_alipay_native_topup":       enableAlipayNative,
 		"enable_waffo_topup":               enableWaffo,
 		"enable_waffo_pancake_topup":       enableWaffoPancake,
 		"enable_redemption":                complianceConfirmed,
@@ -112,7 +139,8 @@ func GetTopUpInfo(c *gin.Context) {
 		}(),
 		"creem_products":          setting.CreemProducts,
 		"pay_methods":             payMethods,
-		"min_topup":               operation_setting.MinTopUp,
+		"min_topup":               effectiveMinTopUp,
+		"alipay_native_min_topup": getAlipayNativeMinTopUp(),
 		"stripe_min_topup":        setting.StripeMinTopUp,
 		"waffo_min_topup":         setting.WaffoMinTopUp,
 		"waffo_pancake_min_topup": setting.WaffoPancakeMinTopUp,
@@ -191,6 +219,10 @@ func RequestEpay(c *gin.Context) {
 	err := c.ShouldBindJSON(&req)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"message": "error", "data": "参数错误"})
+		return
+	}
+	if req.PaymentMethod == model.PaymentMethodAlipayNative && isAlipayNativeTopUpEnabled() {
+		RequestAlipayNativePayFromEpay(c, req)
 		return
 	}
 	if req.Amount < getMinTopup() {
