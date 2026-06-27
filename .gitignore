@@ -1,0 +1,142 @@
+.idea
+.vscode
+.zed
+.history
+upload
+*.exe
+*.db
+build
+*.db-journal
+logs
+web/default/dist
+web/classic/dist
+web/node_modules
+web/dist
+.env
+one-api
+new-api
+/__debug_bin*
+.DS_Store
+tiktoken_cache
+.eslintcache
+.gocache
+.gomodcache/
+.cache
+plans
+.claude
+.cursor
+
+electron/node_modules
+electron/dist
+data/
+.gomodcache/
+.gocache-temp
+.gopath
+.test
+token_estimator_test.go
+skills-lock.json
+.playwright-mcp
+
+# FeiXiangApi local sensitive/runtime files
+.env
+.env.*
+!.env.example
+*.log
+logs/
+tmp/
+temp/
+
+# Database / runtime data
+*.db
+*.sqlite
+*.sqlite3
+one-api.db
+
+# Node / build output
+node_modules/
+web/default/node_modules/
+web/default/dist/
+dist/
+build/
+
+# Patch backups
+*.bak
+*.bak.*
+*.backup
+*.backup.*
+*.orig
+*.tmp
+
+# Docker / system cache
+.DS_Store
+.cache/
+
+# Local backup folders
+.backup*/
+.backup_*/
+backup/
+backups/
+
+# PostgreSQL runtime data
+postgres-data/
+postmaster.pid
+
+# Patch / temp backups
+*.bak
+*.bak.*
+*.backup
+*.backup.*
+*.orig
+*.tmp
+
+# Local backup folders
+.backup*/
+.backup_*/
+backup/
+backups/
+
+# PostgreSQL runtime data
+postgres-data/
+postmaster.pid
+
+# Patch / temp backups
+*.bak
+*.bak.*
+*.backup
+*.backup.*
+*.orig
+*.tmp
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*private_key*
+*PRIVATE_KEY*
+
+# Runtime / backups
+postgres-data/
+.backup*/
+.backup_*/
+*.bak
+*.bak.*
+*.backup
+*.backup.*
+
+# Broken / emergency backup files
+*.broken
+*.broken.*
+*.bak
+*.bak.*
+*.backup
+*.backup.*
+
+# Broken / emergency backup files
+*.broken
+*.broken.*
+*.bak
+*.bak.*
+*.backup
+*.backup.*

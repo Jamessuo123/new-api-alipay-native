@@ -1,0 +1,16 @@
+/* FeiXiangApi v14.12 current-main home H5 responsive and dark-brand patch. */
+.fx-home-page { overflow-x: hidden; background: radial-gradient(circle at 12% -12%, rgba(56, 189, 248, 0.18), transparent 34rem), radial-gradient(circle at 86% 4%, rgba(99, 102, 241, 0.16), transparent 32rem), linear-gradient(180deg, rgba(2, 6, 23, 0.98), rgba(15, 23, 42, 0.97) 42%, rgba(2, 6, 23, 0.99)); }
+.fx-home-page section { position: relative; }
+.fx-home-page .fx-hero-grid { display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(360px, 0.94fr); gap: clamp(24px, 5vw, 72px); align-items: center; }
+.fx-footer-copyright-row, .fx-footer-icp-record { width: 100%; }
+.fx-footer-icp-record a { white-space: nowrap; }
+@media (max-width: 768px) {
+  .fx-home-page { background: radial-gradient(circle at 40% -8%, rgba(56, 189, 248, 0.18), transparent 22rem), linear-gradient(180deg, #020617 0%, #0f172a 48%, #020617 100%); }
+  .fx-home-page .container, .fx-home-page [class*="container"] { width: 100% !important; max-width: 100% !important; padding-left: 16px !important; padding-right: 16px !important; }
+  .fx-home-page .fx-hero-grid, .fx-home-page [class*="grid-cols-2"], .fx-home-page [class*="lg:grid-cols-2"], .fx-home-page [class*="md:grid-cols-2"], .fx-home-page [class*="md:grid-cols-3"], .fx-home-page [class*="md:grid-cols-4"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .fx-home-page h1 { font-size: clamp(2.25rem, 12vw, 4rem) !important; line-height: 1.02 !important; letter-spacing: -0.055em !important; }
+  .fx-home-page h2 { font-size: clamp(1.75rem, 8vw, 3rem) !important; line-height: 1.08 !important; }
+  .fx-home-page p { max-width: 100% !important; } .fx-home-page a, .fx-home-page button { max-width: 100%; }
+  .fx-footer-copyright-row { flex-direction: column !important; align-items: center !important; justify-content: center !important; gap: 8px !important; text-align: center !important; }
+  .fx-footer-icp-record { margin-top: 12px !important; padding-top: 12px !important; text-align: center !important; }
+}
