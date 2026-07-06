@@ -1,0 +1,553 @@
+package doubao
+
+import (
+	"strings"
+	"bytes"
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/QuantumNous/new-api/common"
+
+	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relay/channel"
+	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/service"
+
+	"github.com/gin-gonic/gin"
+	"github.com/pkg/errors"
+	"github.com/samber/lo"
+)
+
+// ============================
+// Request / Response structures
+// ============================
+
+type ContentItem struct {
+	Type     string    `json:"type,omitempty"`
+	Text     string    `json:"text,omitempty"`
+	ImageURL *MediaURL `json:"image_url,omitempty"`
+	VideoURL *MediaURL `json:"video_url,omitempty"`
+	AudioURL *MediaURL `json:"audio_url,omitempty"`
+	Role     string    `json:"role,omitempty"`
+}
+
+type MediaURL struct {
+	URL string `json:"url,omitempty"`
+}
+
+type requestPayload struct {
+	Model                 string         `json:"model"`
+	Content               []ContentItem  `json:"content,omitempty"`
+	CallbackURL           string         `json:"callback_url,omitempty"`
+	ReturnLastFrame       *dto.BoolValue `json:"return_last_frame,omitempty"`
+	ServiceTier           string         `json:"service_tier,omitempty"`
+	ExecutionExpiresAfter *dto.IntValue  `json:"execution_expires_after,omitempty"`
+	GenerateAudio         *dto.BoolValue `json:"generate_audio,omitempty"`
+	Draft                 *dto.BoolValue `json:"draft,omitempty"`
+	Tools                 []struct {
+		Type string `json:"type,omitempty"`
+	} `json:"tools,omitempty"`
+	Resolution  string         `json:"resolution,omitempty"`
+	Ratio       string         `json:"ratio,omitempty"`
+	Duration    *dto.IntValue  `json:"duration,omitempty"`
+	Frames      *dto.IntValue  `json:"frames,omitempty"`
+	Seed        *dto.IntValue  `json:"seed,omitempty"`
+	CameraFixed *dto.BoolValue `json:"camera_fixed,omitempty"`
+	Watermark   *dto.BoolValue `json:"watermark,omitempty"`
+}
+
+type responsePayload struct {
+	ID string `json:"id"` // task_id
+}
+
+type responseTask struct {
+	ID      string `json:"id"`
+	Model   string `json:"model"`
+	Status  string `json:"status"`
+	Content struct {
+		VideoURL string `json:"video_url"`
+	} `json:"content"`
+	Seed            int    `json:"seed"`
+	Resolution      string `json:"resolution"`
+	Duration        int    `json:"duration"`
+	Ratio           string `json:"ratio"`
+	FramesPerSecond int    `json:"framespersecond"`
+	ServiceTier     string `json:"service_tier"`
+	Tools           []struct {
+		Type string `json:"type"`
+	} `json:"tools"`
+	Usage struct {
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+		ToolUsage        struct {
+			WebSearch int `json:"web_search"`
+		} `json:"tool_usage"`
+	} `json:"usage"`
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+	CreatedAt int64 `json:"created_at"`
+	UpdatedAt int64 `json:"updated_at"`
+}
+
+// ============================
+// Adaptor implementation
+// ============================
+
+type TaskAdaptor struct {
+	taskcommon.BaseBilling
+	ChannelType int
+	apiKey      string
+	baseURL     string
+}
+
+func (a *TaskAdaptor) Init(info *relaycommon.RelayInfo) {
+	a.ChannelType = info.ChannelType
+	a.baseURL = info.ChannelBaseUrl
+	a.apiKey = info.ApiKey
+}
+
+// ValidateRequestAndSetAction parses body, validates fields and sets default action.
+func (a *TaskAdaptor) ValidateRequestAndSetAction(c *gin.Context, info *relaycommon.RelayInfo) (taskErr *dto.TaskError) {
+	// Accept only POST /v1/video/generations as "generate" action.
+	return relaycommon.ValidateBasicTaskRequest(c, info, constant.TaskActionGenerate)
+}
+
+// BuildRequestURL constructs the upstream URL.
+func (a *TaskAdaptor) BuildRequestURL(_ *relaycommon.RelayInfo) (string, error) {
+	return fmt.Sprintf("%s/api/v3/contents/generations/tasks", a.baseURL), nil
+}
+
+// BuildRequestHeader sets required headers.
+func (a *TaskAdaptor) BuildRequestHeader(_ *gin.Context, req *http.Request, _ *relaycommon.RelayInfo) error {
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+	return nil
+}
+
+// EstimateBilling 检测请求 metadata 中是否包含视频输入，返回视频折扣 OtherRatio。
+// FEIXIANG_SEEDANCE_FAST_PRICING_V1
+// FEIXIANG_SEEDANCE_RESOLUTION_PRICING_V1
+func (a *TaskAdaptor) EstimateBilling(c *gin.Context, info *relaycommon.RelayInfo) map[string]float64 {
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return nil
+	}
+
+	modelName := info.OriginModelName
+	if modelName == "" {
+		modelName = req.Model
+	}
+
+	resolution := feiXiangResolveSeedanceBillingResolution(modelName, req.Metadata)
+	multipliers := map[string]float64{}
+
+	if resolutionRatio, ok := GetSeedanceResolutionMultiplier(modelName, resolution); ok && resolutionRatio > 0 && resolutionRatio != 1.0 {
+		multipliers["resolution_"+resolution] = resolutionRatio
+	}
+
+	if hasVideoInMetadata(req.Metadata) {
+		if videoRatio, ok := GetSeedanceVideoInputRatio(modelName, resolution); ok && videoRatio > 0 {
+			multipliers["video_input"] = videoRatio
+		}
+	}
+
+	if len(multipliers) == 0 {
+		return nil
+	}
+	return multipliers
+}
+
+// hasVideoInMetadata 直接检查 metadata 的 content 数组是否包含 video_url 条目，
+// 避免构建完整的上游 requestPayload。
+func hasVideoInMetadata(metadata map[string]interface{}) bool {
+	if metadata == nil {
+		return false
+	}
+	return hasVideoInputForSeedanceResolutionPricing(metadata)
+}
+
+// BuildRequestBody converts request into Doubao specific format.
+func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayInfo) (io.Reader, error) {
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := a.convertToRequestPayload(&req)
+	if err != nil {
+		return nil, errors.Wrap(err, "convert request payload failed")
+	}
+	if info.IsModelMapped {
+		body.Model = info.UpstreamModelName
+	} else {
+		info.UpstreamModelName = body.Model
+	}
+	data, err := common.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	return bytes.NewReader(data), nil
+}
+
+// DoRequest delegates to common helper.
+func (a *TaskAdaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (*http.Response, error) {
+	return channel.DoTaskApiRequest(a, c, info, requestBody)
+}
+
+// DoResponse handles upstream response, returns taskID etc.
+func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (taskID string, taskData []byte, taskErr *dto.TaskError) {
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		taskErr = service.TaskErrorWrapper(err, "read_response_body_failed", http.StatusInternalServerError)
+		return
+	}
+	_ = resp.Body.Close()
+
+	// Parse Doubao response
+	var dResp responsePayload
+	if err := common.Unmarshal(responseBody, &dResp); err != nil {
+		taskErr = service.TaskErrorWrapper(errors.Wrapf(err, "body: %s", responseBody), "unmarshal_response_body_failed", http.StatusInternalServerError)
+		return
+	}
+
+	if dResp.ID == "" {
+		taskErr = service.TaskErrorWrapper(fmt.Errorf("task_id is empty"), "invalid_response", http.StatusInternalServerError)
+		return
+	}
+
+	ov := dto.NewOpenAIVideo()
+	ov.ID = info.PublicTaskID
+	ov.TaskID = info.PublicTaskID
+	ov.CreatedAt = time.Now().Unix()
+	ov.Model = info.OriginModelName
+
+	c.JSON(http.StatusOK, ov)
+	return dResp.ID, responseBody, nil
+}
+
+// FetchTask fetch task status
+func (a *TaskAdaptor) FetchTask(baseUrl, key string, body map[string]any, proxy string) (*http.Response, error) {
+	taskID, ok := body["task_id"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid task_id")
+	}
+
+	uri := fmt.Sprintf("%s/api/v3/contents/generations/tasks/%s", baseUrl, taskID)
+
+	req, err := http.NewRequest(http.MethodGet, uri, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+key)
+
+	client, err := service.GetHttpClientWithProxy(proxy)
+	if err != nil {
+		return nil, fmt.Errorf("new proxy http client failed: %w", err)
+	}
+	return client.Do(req)
+}
+
+func (a *TaskAdaptor) GetModelList() []string {
+	return ModelList
+}
+
+func (a *TaskAdaptor) GetChannelName() string {
+	return ChannelName
+}
+
+// FEIXIANG_SEEDANCE_2_NATIVE_TASK_ADAPTOR_V2
+// FEIXIANG_SEEDANCE_FAST_PRICING_V1
+// FEIXIANG_SEEDANCE_RESOLUTION_PRICING_V1
+func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*requestPayload, error) {
+	metadata := req.Metadata
+	if metadata == nil {
+		metadata = map[string]interface{}{}
+	}
+
+	r := requestPayload{
+		Model:   req.Model,
+		Content: []ContentItem{},
+	}
+
+	// Pass official Ark / Seedance fields through metadata first.
+	if err := taskcommon.UnmarshalMetadata(metadata, &r); err != nil {
+		return nil, errors.Wrap(err, "unmarshal metadata failed")
+	}
+
+	originModel := req.Model
+	if spec, ok := ResolveSeedanceResolutionPricingAlias(originModel); ok {
+		r.Model = spec.UpstreamModel
+		currentResolution := feiXiangNormalizeSeedanceResolution(r.Resolution)
+		if currentResolution != "" && currentResolution != spec.Resolution {
+			return nil, fmt.Errorf("%s is fixed to %s, but request resolution is %s", originModel, spec.Resolution, r.Resolution)
+		}
+		r.Resolution = spec.Resolution
+	} else if IsSeedanceResolutionPricingModel(originModel) || IsSeedanceResolutionPricingModel(r.Model) {
+		if r.Resolution == "" {
+			r.Resolution = "720p"
+		} else {
+			r.Resolution = feiXiangNormalizeSeedanceResolution(r.Resolution)
+		}
+	}
+
+	images := req.Images
+	if len(images) == 0 && req.Image != "" {
+		images = []string{req.Image}
+	}
+
+	// OpenAI-style convenience image input for Seedance.
+	if len(images) > 0 && !feiXiangSeedance2HasContentType(r.Content, "image_url") {
+		for idx, imgURL := range images {
+			if imgURL == "" {
+				continue
+			}
+			r.Content = append(r.Content, ContentItem{
+				Type: "image_url",
+				ImageURL: &MediaURL{
+					URL: imgURL,
+				},
+				Role: feiXiangSeedance2ImageRole(idx, len(images)),
+			})
+		}
+	}
+
+	// seconds is OpenAI-compatible video field. duration is NewAPI task field.
+	if sec, _ := strconv.Atoi(req.Seconds); sec > 0 {
+		r.Duration = lo.ToPtr(dto.IntValue(sec))
+	} else if req.Duration > 0 {
+		r.Duration = lo.ToPtr(dto.IntValue(req.Duration))
+	}
+
+	// prompt is authoritative when provided; avoid duplicate text content.
+	if req.Prompt != "" {
+		r.Content = lo.Reject(r.Content, func(c ContentItem, _ int) bool {
+			return c.Type == "text"
+		})
+		r.Content = append(r.Content, ContentItem{
+			Type: "text",
+			Text: req.Prompt,
+		})
+	}
+
+	if IsSeedanceResolutionPricingModel(originModel) || IsSeedanceResolutionPricingModel(r.Model) {
+		if r.Duration == nil {
+			r.Duration = lo.ToPtr(dto.IntValue(4))
+		}
+		if err := feiXiangValidateSeedanceResolutionPricingRequest(originModel, r.Model, r.Resolution, r.Duration); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(r.Content) == 0 {
+		return nil, fmt.Errorf("seedance content is empty; provide prompt, images, or metadata.content")
+	}
+
+	return &r, nil
+}
+
+
+func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, error) {
+	resTask := responseTask{}
+	if err := common.Unmarshal(respBody, &resTask); err != nil {
+		return nil, errors.Wrap(err, "unmarshal task result failed")
+	}
+
+	taskResult := relaycommon.TaskInfo{
+		Code: 0,
+	}
+
+	// Map Doubao status to internal status
+	switch resTask.Status {
+	case "pending", "queued":
+		taskResult.Status = model.TaskStatusQueued
+		taskResult.Progress = "10%"
+	case "processing", "running":
+		taskResult.Status = model.TaskStatusInProgress
+		taskResult.Progress = "50%"
+	case "succeeded":
+		taskResult.Status = model.TaskStatusSuccess
+		taskResult.Progress = "100%"
+		taskResult.Url = resTask.Content.VideoURL
+		// 解析 usage 信息用于按倍率计费
+		taskResult.CompletionTokens = resTask.Usage.CompletionTokens
+		taskResult.TotalTokens = resTask.Usage.TotalTokens
+	case "failed":
+		taskResult.Status = model.TaskStatusFailure
+		taskResult.Progress = "100%"
+		taskResult.Reason = resTask.Error.Message
+	default:
+		// Unknown status, treat as processing
+		taskResult.Status = model.TaskStatusInProgress
+		taskResult.Progress = "30%"
+	}
+
+	return &taskResult, nil
+}
+
+func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, error) {
+	var dResp responseTask
+	if err := common.Unmarshal(originTask.Data, &dResp); err != nil {
+		return nil, errors.Wrap(err, "unmarshal doubao task data failed")
+	}
+
+	openAIVideo := dto.NewOpenAIVideo()
+	openAIVideo.ID = originTask.TaskID
+	openAIVideo.TaskID = originTask.TaskID
+	openAIVideo.Status = originTask.Status.ToVideoStatus()
+	openAIVideo.SetProgressStr(originTask.Progress)
+	openAIVideo.SetMetadata("url", dResp.Content.VideoURL)
+	openAIVideo.CreatedAt = originTask.CreatedAt
+	openAIVideo.CompletedAt = originTask.UpdatedAt
+	openAIVideo.Model = originTask.Properties.OriginModelName
+
+	if dResp.Status == "failed" {
+		openAIVideo.Error = &dto.OpenAIVideoError{
+			Message: dResp.Error.Message,
+			Code:    dResp.Error.Code,
+		}
+	}
+
+	return common.Marshal(openAIVideo)
+}
+
+func feiXiangSeedance2HasContentType(content []ContentItem, contentType string) bool {
+	for _, item := range content {
+		if item.Type == contentType {
+			return true
+		}
+		switch contentType {
+		case "image_url":
+			if item.ImageURL != nil {
+				return true
+			}
+		case "video_url":
+			if item.VideoURL != nil {
+				return true
+			}
+		case "audio_url":
+			if item.AudioURL != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func feiXiangSeedance2ImageRole(index int, total int) string {
+	if total <= 1 {
+		return "first_frame"
+	}
+	if total == 2 {
+		if index == 0 {
+			return "first_frame"
+		}
+		return "last_frame"
+	}
+	return "reference_image"
+}
+
+func hasVideoInputForSeedanceFastPricing(value interface{}) bool {
+	return hasVideoInputForSeedanceResolutionPricing(value)
+}
+
+func feiXiangNormalizeSeedanceResolution(resolution string) string {
+	return strings.ToLower(strings.TrimSpace(resolution))
+}
+
+func feiXiangValidateSeedanceFastPricingRequest(resolution string, duration *dto.IntValue) error {
+	return feiXiangValidateSeedanceResolutionPricingRequest(FeiXiangSeedanceFastModelID, FeiXiangSeedanceFastModelID, resolution, duration)
+}
+
+func hasVideoInputForSeedanceResolutionPricing(value interface{}) bool {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		if t, ok := v["type"].(string); ok && t == "video_url" {
+			return true
+		}
+		if _, ok := v["video_url"]; ok {
+			return true
+		}
+		for _, child := range v {
+			if hasVideoInputForSeedanceResolutionPricing(child) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, child := range v {
+			if hasVideoInputForSeedanceResolutionPricing(child) {
+				return true
+			}
+		}
+	case []map[string]interface{}:
+		for _, child := range v {
+			if hasVideoInputForSeedanceResolutionPricing(child) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func feiXiangResolveSeedanceBillingResolution(modelName string, metadata map[string]interface{}) string {
+	if spec, ok := ResolveSeedanceResolutionPricingAlias(modelName); ok {
+		return spec.Resolution
+	}
+	if metadata != nil {
+		if raw, ok := metadata["resolution"].(string); ok {
+			if normalized := feiXiangNormalizeSeedanceResolution(raw); normalized != "" {
+				return normalized
+			}
+		}
+	}
+	return "720p"
+}
+
+func feiXiangValidateSeedanceResolutionPricingRequest(originModel string, upstreamModel string, resolution string, duration *dto.IntValue) error {
+	resolution = feiXiangNormalizeSeedanceResolution(resolution)
+	modelForPolicy := originModel
+	if modelForPolicy == "" {
+		modelForPolicy = upstreamModel
+	}
+
+	if IsSeedanceFastResolutionPricingModel(modelForPolicy) || IsSeedanceFastResolutionPricingModel(upstreamModel) {
+		switch resolution {
+		case "480p", "720p":
+			// allowed
+		case "1080p", "4k":
+			return fmt.Errorf("doubao-seedance-2.0-fast only supports 480p/720p; %s requires standard Seedance 2.0", resolution)
+		default:
+			return fmt.Errorf("doubao-seedance-2.0-fast only supports 480p/720p; got %s", resolution)
+		}
+	} else if IsSeedanceStandardResolutionPricingModel(modelForPolicy) || IsSeedanceStandardResolutionPricingModel(upstreamModel) {
+		switch resolution {
+		case "480p", "720p", "1080p", "4k":
+			// allowed
+		default:
+			return fmt.Errorf("doubao-seedance-2.0 only supports 480p/720p/1080p/4k; got %s", resolution)
+		}
+	}
+
+	if duration == nil {
+		return fmt.Errorf("seedance duration is required")
+	}
+	d := int(*duration)
+	if d == -1 {
+		return fmt.Errorf("seedance resolution pricing v1 disables duration=-1 to avoid unpredictable cost; use 4-15 seconds")
+	}
+	if d < 4 || d > 15 {
+		return fmt.Errorf("seedance duration must be 4-15 seconds; got %d", d)
+	}
+	return nil
+}

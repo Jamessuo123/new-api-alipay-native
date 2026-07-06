@@ -1,0 +1,21 @@
+services:
+  feixiangapi-candidate:
+    image: ${FX_CANDIDATE_IMAGE:-feixiangapi-newapi:creative-p1-p2}
+    container_name: feixiangapi-newapi-candidate
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3001:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./logs-candidate:/app/logs
+      - ./certs:/app/certs:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - PORT=3000
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/status >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 45s
+      retries: 5

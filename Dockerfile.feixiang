@@ -1,0 +1,63 @@
+# syntax=docker/dockerfile:1.7
+
+FROM public.ecr.aws/docker/library/node:22-bookworm AS default_web
+WORKDIR /src/web/default
+
+ENV NODE_OPTIONS=--max-old-space-size=1536
+
+RUN npm install -g pnpm@10.13.1 --registry=https://registry.npmmirror.com \
+  && pnpm config set registry https://registry.npmmirror.com
+
+COPY web/default/package.json ./
+
+RUN --mount=type=cache,id=pnpm-default-store,target=/pnpm/store \
+  pnpm install --no-frozen-lockfile --store-dir /pnpm/store
+
+COPY web/default ./
+
+RUN pnpm run build
+
+
+FROM public.ecr.aws/docker/library/golang:bookworm AS backend
+WORKDIR /src
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends build-essential ca-certificates tzdata \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY go.mod go.sum ./
+
+RUN --mount=type=cache,id=gomod,target=/go/pkg/mod \
+  --mount=type=cache,id=gobuild,target=/root/.cache/go-build \
+  go env -w GOPROXY=https://goproxy.cn,direct \
+  && go mod download
+
+COPY . .
+
+COPY --from=default_web /src/web/default/dist ./web/default/dist
+
+# 当前只使用 default 新前端；classic 旧前端先用 default dist 占位，避免 classic 构建阻塞上线
+RUN rm -rf ./web/classic/dist \
+  && mkdir -p ./web/classic/dist \
+  && cp -a ./web/default/dist/. ./web/classic/dist/
+
+RUN --mount=type=cache,id=gomod,target=/go/pkg/mod \
+  --mount=type=cache,id=gobuild,target=/root/.cache/go-build \
+  go build -trimpath -ldflags "-s -w" -o /out/new-api .
+
+
+FROM public.ecr.aws/docker/library/debian:bookworm-slim
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates tzdata curl \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=backend /out/new-api /app/new-api
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=45s --retries=5 \
+  CMD curl -fsS http://127.0.0.1:3000/api/status >/dev/null || exit 1
+
+CMD ["/app/new-api", "--log-dir", "/app/logs"]

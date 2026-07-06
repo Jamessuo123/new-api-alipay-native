@@ -1,0 +1,785 @@
+import React from 'react'
+
+type LegalKind = 'privacy' | 'agreement'
+
+type Section = {
+  title: string
+  body: Array<
+    | { type: 'p'; text: React.ReactNode }
+    | { type: 'h3'; text: string }
+    | { type: 'ul'; items: React.ReactNode[] }
+    | { type: 'notice'; text: React.ReactNode }
+  >
+}
+
+const SITE_NAME = 'FeiXiangApi'
+const UPDATED_AT = '2026.6.17'
+const EFFECTIVE_AT = '2026.6.17'
+
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    width: '100%',
+    minHeight: 'calc(100vh - 80px)',
+    background:
+      'radial-gradient(circle at 18% 0%, rgba(22,119,255,.08), transparent 360px), linear-gradient(180deg,#ffffff 0%,#f7fbff 42%,#ffffff 100%)',
+    color: '#122334',
+  },
+  shell: {
+    width: 'min(1060px, calc(100% - 32px))',
+    margin: '0 auto',
+    padding: '42px 0 72px',
+  },
+  hero: {
+    position: 'relative',
+    overflow: 'hidden',
+    border: '1px solid rgba(22,119,255,.16)',
+    borderRadius: 28,
+    background:
+      'linear-gradient(135deg, rgba(255,255,255,.98), rgba(240,247,255,.96))',
+    boxShadow: '0 20px 55px rgba(18,35,52,.08)',
+    padding: '34px 36px',
+  },
+  heroBubble: {
+    position: 'absolute',
+    right: -76,
+    top: -86,
+    width: 220,
+    height: 220,
+    borderRadius: '999px',
+    background: 'rgba(22,119,255,.10)',
+    pointerEvents: 'none',
+  },
+  eyebrow: {
+    margin: '0 0 10px',
+    color: '#1677ff',
+    fontSize: 13,
+    fontWeight: 800,
+    letterSpacing: '.12em',
+    textTransform: 'uppercase',
+  },
+  title: {
+    margin: 0,
+    color: '#07182b',
+    fontSize: 'clamp(34px, 5vw, 54px)',
+    lineHeight: 1.08,
+    fontWeight: 900,
+    letterSpacing: '-0.05em',
+  },
+  desc: {
+    maxWidth: 790,
+    margin: '18px 0 0',
+    color: '#52667d',
+    fontSize: 16,
+    lineHeight: 1.9,
+  },
+  actions: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 24,
+  },
+  button: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 38,
+    padding: '0 16px',
+    border: '1px solid #d8e6f5',
+    borderRadius: 999,
+    background: '#fff',
+    color: '#122334',
+    fontSize: 14,
+    fontWeight: 700,
+    textDecoration: 'none',
+  },
+  buttonPrimary: {
+    borderColor: 'transparent',
+    background: 'linear-gradient(135deg,#1677ff,#4096ff)',
+    color: '#fff',
+  },
+  metaGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3,minmax(0,1fr))',
+    gap: 14,
+    marginTop: 26,
+  },
+  metaCard: {
+    border: '1px solid #dbe8f6',
+    borderRadius: 18,
+    background: 'rgba(255,255,255,.82)',
+    padding: '15px 17px',
+  },
+  metaLabel: {
+    marginBottom: 4,
+    color: '#6c7f93',
+    fontSize: 13,
+  },
+  metaValue: {
+    color: '#122334',
+    fontSize: 16,
+    fontWeight: 850,
+  },
+  layout: {
+    display: 'grid',
+    gridTemplateColumns: '250px minmax(0, 1fr)',
+    gap: 24,
+    alignItems: 'start',
+    marginTop: 24,
+  },
+  toc: {
+    position: 'sticky',
+    top: 24,
+    border: '1px solid #dbe8f6',
+    borderRadius: 22,
+    background: 'rgba(255,255,255,.92)',
+    boxShadow: '0 12px 30px rgba(18,35,52,.05)',
+    padding: 18,
+  },
+  tocTitle: {
+    margin: '0 0 12px',
+    color: '#122334',
+    fontSize: 15,
+    fontWeight: 850,
+  },
+  tocLink: {
+    display: 'block',
+    padding: '8px 10px',
+    borderRadius: 12,
+    color: '#61758a',
+    fontSize: 14,
+    lineHeight: 1.38,
+    textDecoration: 'none',
+  },
+  content: {
+    display: 'grid',
+    gap: 18,
+  },
+  card: {
+    border: '1px solid #dbe8f6',
+    borderRadius: 22,
+    background: 'rgba(255,255,255,.96)',
+    boxShadow: '0 14px 34px rgba(18,35,52,.045)',
+    padding: '26px 28px',
+  },
+  sectionTitle: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: 12,
+    margin: '0 0 16px',
+    color: '#0b1f33',
+    fontSize: 23,
+    lineHeight: 1.35,
+    fontWeight: 900,
+    letterSpacing: '-.03em',
+  },
+  index: {
+    flex: '0 0 auto',
+    display: 'inline-grid',
+    placeItems: 'center',
+    minWidth: 34,
+    height: 34,
+    padding: '0 8px',
+    borderRadius: 12,
+    background: 'linear-gradient(135deg,#1677ff,#69b1ff)',
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 900,
+  },
+  h3: {
+    margin: '20px 0 8px',
+    color: '#10263d',
+    fontSize: 17,
+    lineHeight: 1.5,
+    fontWeight: 850,
+  },
+  p: {
+    margin: '10px 0',
+    color: '#263d55',
+    fontSize: 15,
+    lineHeight: 1.86,
+  },
+  ul: {
+    margin: '10px 0 0',
+    paddingLeft: '1.35em',
+    color: '#263d55',
+    fontSize: 15,
+    lineHeight: 1.86,
+  },
+  li: {
+    margin: '6px 0',
+  },
+  notice: {
+    marginTop: 14,
+    border: '1px solid #ffd591',
+    borderRadius: 16,
+    background: '#fff7e6',
+    color: '#7a4b00',
+    padding: '14px 16px',
+    fontSize: 14,
+    lineHeight: 1.82,
+  },
+  placeholder: {
+    color: '#c2410c',
+    fontWeight: 800,
+  },
+  footer: {
+    border: '1px solid #dbe8f6',
+    borderRadius: 22,
+    background: '#fff',
+    color: '#66798d',
+    textAlign: 'center',
+    fontSize: 14,
+    padding: 22,
+  },
+}
+
+function Placeholder({ children }: { children: React.ReactNode }) {
+  return <span style={styles.placeholder}>{children}</span>
+}
+
+const privacySections: Section[] = [
+  {
+    title: '我们如何收集和使用信息',
+    body: [
+      {
+        type: 'p',
+        text: '为向您提供账号注册、登录、充值支付、API 调用、额度扣减、日志查询、安全风控、客户服务等功能，我们可能在必要范围内收集和使用相关信息。',
+      },
+      { type: 'h3', text: '账号信息' },
+      {
+        type: 'ul',
+        items: [
+          '用户名、邮箱地址、手机号码；',
+          '登录密码的加密结果；',
+          '头像、昵称、用户角色、用户分组、账号状态；',
+          '注册时间、登录时间、账号配置。',
+        ],
+      },
+      {
+        type: 'p',
+        text: '这些信息用于创建账号、识别用户身份、保障账号安全、提供控制台服务、分配模型权限和处理售后问题。',
+      },
+      { type: 'h3', text: '登录与安全信息' },
+      {
+        type: 'ul',
+        items: [
+          'IP 地址、设备信息、浏览器类型、操作系统；',
+          '访问时间、登录状态、异常登录记录；',
+          '安全验证记录、Cookie 或类似技术标识。',
+        ],
+      },
+      {
+        type: 'p',
+        text: '这些信息用于登录验证、安全风控、异常检测、防止账号盗用、防止恶意攻击、排查系统问题和保障服务稳定。',
+      },
+      { type: 'h3', text: '充值与订单信息' },
+      {
+        type: 'ul',
+        items: [
+          '订单号、用户 ID、用户名；',
+          '支付金额、到账额度、支付渠道、支付状态；',
+          '下单时间、支付完成时间、第三方支付交易号；',
+          '充值记录、余额变更记录、支付回调信息。',
+        ],
+      },
+      {
+        type: 'p',
+        text: '这些信息用于创建订单、完成支付、处理到账、查询订单、售后核验、财务对账、防范欺诈支付和满足合规要求。',
+      },
+      { type: 'h3', text: 'API 调用信息' },
+      {
+        type: 'ul',
+        items: [
+          'API Key 或令牌标识、请求时间、请求模型、实际使用渠道；',
+          '输入 token 数、输出 token 数、消耗额度；',
+          '请求状态、错误信息、响应耗时、调用 IP；',
+          '分组信息、接口路径、必要的请求参数和响应元数据。',
+        ],
+      },
+      {
+        type: 'notice',
+        text: '请不要在 API 请求中提交身份证号、银行卡号、支付密码、个人生物识别信息、病历、精确定位、未成年人信息、商业机密、国家秘密、重要数据或其他敏感信息，除非您已依法取得充分授权并自行承担相应风险。',
+      },
+    ],
+  },
+  {
+    title: '我们如何使用信息',
+    body: [
+      {
+        type: 'ul',
+        items: [
+          '创建、维护和管理用户账号；',
+          '完成登录、身份验证和安全保护；',
+          '提供 API 调用、模型转发、日志统计和额度扣减服务；',
+          '处理充值、支付、到账、退款、对账和订单查询；',
+          '进行用户分组、模型权限、限流和风控管理；',
+          '识别、防范和处理违法违规、欺诈、攻击、滥用或异常调用行为；',
+          '排查系统故障、修复漏洞、优化服务体验；',
+          '发送必要的服务通知、安全通知、订单通知、规则变更通知。',
+        ],
+      },
+    ],
+  },
+  {
+    title: '共享、转让和公开披露',
+    body: [
+      {
+        type: 'p',
+        text: '为向您提供服务，我们可能在必要范围内与上游 AI 模型服务商、支付服务商、云服务商、短信/邮件服务商及法律法规允许或要求的其他第三方共享必要信息。',
+      },
+      {
+        type: 'p',
+        text: '未经您的明确同意，我们不会将您的个人信息转让给任何公司、组织或个人。但在合并、分立、收购、资产转让、破产清算或类似交易中，如涉及个人信息转让，我们会要求新的持有方继续受本隐私政策约束，或重新向您征求授权同意。',
+      },
+      {
+        type: 'p',
+        text: '我们不会公开披露您的个人信息，除非已取得您的单独同意，或根据法律法规、司法机关、行政机关、监管部门要求必须披露，或为保护用户、平台、社会公共利益或第三方合法权益所合理必要。',
+      },
+    ],
+  },
+  {
+    title: '上游模型服务与跨境处理说明',
+    body: [
+      {
+        type: 'p',
+        text: '平台可能接入多个国内外上游模型服务商。根据您调用的模型、渠道配置和系统调度策略不同，您的 API 请求内容、必要参数和相关元数据可能会被转发至相应上游服务商处理。',
+      },
+      {
+        type: 'p',
+        text: '如上游服务商位于中国大陆以外，或其服务器、技术支持、数据处理链路涉及境外，相关数据可能发生跨境处理。我们会在合理范围内根据适用法律法规采取必要措施。',
+      },
+    ],
+  },
+  {
+    title: 'Cookie 和类似技术',
+    body: [
+      {
+        type: 'p',
+        text: '为保障网站正常运行、保持登录状态、提升访问体验、统计访问情况和进行安全风控，我们可能使用 Cookie、本地存储或类似技术。',
+      },
+      {
+        type: 'p',
+        text: '您可以通过浏览器设置管理或清除 Cookie。但如果您禁用 Cookie，可能导致无法登录、无法保持会话、部分功能异常或服务体验下降。',
+      },
+    ],
+  },
+  {
+    title: '信息保存期限',
+    body: [
+      {
+        type: 'ul',
+        items: [
+          '账号信息通常会在您的账号存续期间保存；',
+          '订单、支付、充值、余额变更、财务对账等记录可能根据法律法规、财务管理和争议处理需要保存较长时间；',
+          'API 调用日志会根据系统配置、安全要求、统计需要和合规要求保存一定期限；',
+          '当信息保存期限届满，或处理目的已实现、无法实现或不再必要时，我们将依法删除或匿名化处理相关信息，法律法规另有规定的除外。',
+        ],
+      },
+    ],
+  },
+  {
+    title: '信息安全保护',
+    body: [
+      {
+        type: 'p',
+        text: '我们会采取合理可行的安全措施保护您的信息，包括账号密码加密存储、API Key 加密或脱敏展示、访问权限控制、日志审计、HTTPS 加密传输、防火墙和安全策略、数据备份、异常登录和异常调用检测等。',
+      },
+      {
+        type: 'notice',
+        text: '请您妥善保管账号、密码和 API Key，不要将令牌公开到 GitHub、网页前端、客户端应用、日志文件、截图或其他不安全位置。',
+      },
+    ],
+  },
+  {
+    title: '您的权利',
+    body: [
+      {
+        type: 'p',
+        text: '在适用法律法规规定的范围内，您可以对您的个人信息行使查询、复制、更正、补充、删除、注销账号、撤回授权同意、获取个人信息副本、要求解释说明等权利。',
+      },
+      {
+        type: 'p',
+        text: '您可以通过平台提供的功能自行操作，或通过本隐私政策列明的联系方式联系我们处理。为保障账号安全，我们可能需要验证您的身份后再响应您的请求。',
+      },
+    ],
+  },
+  {
+    title: '未成年人保护',
+    body: [
+      {
+        type: 'p',
+        text: '本平台主要面向具备完全民事行为能力的成年人、企业和开发者用户。如您为未成年人，应在父母或其他监护人的同意和指导下使用本平台服务。',
+      },
+      {
+        type: 'p',
+        text: '如果我们发现未在监护人同意下收集了未成年人的个人信息，我们将依法尽快删除或采取其他必要措施。',
+      },
+    ],
+  },
+  {
+    title: '第三方链接和服务',
+    body: [
+      {
+        type: 'p',
+        text: '本平台可能包含第三方网站、支付页面、上游服务商文档、模型服务、开源项目或其他外部链接。第三方服务由相应第三方独立运营，其个人信息处理活动不适用本隐私政策。',
+      },
+    ],
+  },
+  {
+    title: '隐私政策更新',
+    body: [
+      {
+        type: 'p',
+        text: '我们可能根据法律法规变化、业务调整、服务升级、上游服务变化或合规要求更新本隐私政策。更新后的隐私政策将在本平台页面公布，并自公布的生效日期起生效。',
+      },
+      {
+        type: 'p',
+        text: '如您不同意更新后的隐私政策，应停止使用本平台服务。您继续使用本平台服务的，视为您已了解并接受更新后的隐私政策。',
+      },
+    ],
+  },
+  {
+    title: '联系我们',
+    body: [
+      {
+        type: 'ul',
+        items: [
+          <>运营主体：<Placeholder>【运营主体名称】</Placeholder></>,
+          <>注册地址：<Placeholder>【公司注册地址】</Placeholder></>,
+          <>联系邮箱：<Placeholder>【联系邮箱】</Placeholder></>,
+          <>客服电话：<Placeholder>【客服电话】</Placeholder></>,
+          <>网站域名：<Placeholder>【网站域名】</Placeholder></>,
+        ],
+      },
+    ],
+  },
+]
+
+const agreementSections: Section[] = [
+  {
+    title: '定义',
+    body: [
+      {
+        type: 'ul',
+        items: [
+          <>“本平台”指由 <Placeholder>【运营主体名称】</Placeholder> 运营的 {SITE_NAME} 网站、控制台、API 服务、文档页面、充值系统、令牌系统及相关服务。</>,
+          '“用户”指注册、登录、购买额度、创建令牌、调用 API 或以其他方式使用本平台服务的自然人、法人或其他组织。',
+          '“API 服务”指本平台向用户提供的 AI 模型调用、模型转发、接口鉴权、用量统计、日志记录、额度扣减、渠道调度等服务。',
+          '“上游服务商”指 OpenAI、Anthropic、Google、DeepSeek、阿里云、Moonshot、智谱、MiniMax、xAI、第三方聚合平台或其他由本平台接入的模型、支付、短信、邮箱、云服务提供方。',
+          '“额度”指用户通过充值、兑换码、赠送、管理员发放或其他合法方式获得的可用于调用本平台服务的账户余额、点数、配额或等价权益。',
+          '“令牌”指用户在本平台创建的 API Key、访问令牌或其他用于接口鉴权的凭证。',
+        ],
+      },
+    ],
+  },
+  {
+    title: '账号注册与使用',
+    body: [
+      {
+        type: 'ul',
+        items: [
+          '您应按照本平台要求提供真实、准确、完整、有效的注册信息，并在信息发生变化时及时更新。',
+          '您应妥善保管账号、密码、API Key、访问令牌、登录设备及其他身份凭证。',
+          '未经本平台书面同意，您不得转让、出租、出借、共享、出售账号或 API Key。',
+          '如发现账号、密码或 API Key 被盗用、泄露或存在异常调用，您应立即修改密码、删除或重置令牌，并及时联系本平台处理。',
+          '本平台有权根据安全风控、合规要求、异常调用、恶意注册、批量注册、滥用服务等情况，对相关账号采取限制登录、暂停调用、冻结额度、禁用令牌、要求验证身份等措施。',
+        ],
+      },
+    ],
+  },
+  {
+    title: '服务内容',
+    body: [
+      {
+        type: 'p',
+        text: '本平台可能向用户提供 AI 模型 API 调用、OpenAI 兼容格式接口、模型列表、模型分组、模型转发、渠道调度、API Key 管理、调用日志、用量统计、余额查询、额度充值、兑换码、支付订单、充值记录、用户控制台、管理后台、文档和技术支持等服务。',
+      },
+      {
+        type: 'p',
+        text: '本平台有权根据业务发展、上游服务变化、法律法规要求、系统维护、安全风控或运营策略，对部分服务内容、模型范围、价格、倍率、限流规则、接口路径、调用参数、服务可用性进行新增、变更、暂停或终止。',
+      },
+    ],
+  },
+  {
+    title: 'API 调用与模型服务',
+    body: [
+      {
+        type: 'ul',
+        items: [
+          '本平台作为 AI API 聚合与转发服务平台，可能将您的 API 请求转发至不同上游服务商处理。',
+          '不同上游模型在响应速度、稳定性、准确性、上下文长度、输出风格、计费方式、可用地区、服务限制等方面可能存在差异。',
+          '本平台不保证 AI 生成内容完全准确、完整、可靠、适用于特定目的，也不保证其不会产生错误、遗漏、偏见、不当内容或不符合预期的结果。',
+          '您应自行判断、核验并承担使用 AI 输出内容所产生的风险。对于医疗、法律、金融、投资、教育、就业、政务、公共安全等重要场景，您不得仅依赖 AI 输出内容作出决策。',
+          '您不得通过本平台上传、输入、提交或处理违反法律法规、公序良俗、第三方权益或本协议约定的内容。',
+        ],
+      },
+      {
+        type: 'notice',
+        text: '您不得将本平台服务用于诈骗、赌博、色情、侵权、恶意营销、网络攻击、绕过安全机制、生成恶意代码、批量注册、刷量、撞库、爬虫滥用等活动。',
+      },
+    ],
+  },
+  {
+    title: '额度、计费与支付',
+    body: [
+      {
+        type: 'ul',
+        items: [
+          '用户可通过在线支付、兑换码、管理员发放、活动赠送或本平台支持的其他方式获取额度。',
+          '本平台可能根据模型类型、输入 token、输出 token、请求次数、固定价格、模型倍率（视频模型=文生/无视频输入）、分组倍率、上下文长度、图片、音频、视频或其他计费维度扣减额度。',
+          '具体价格、倍率、扣费规则以本平台页面、后台配置、订单页面或接口返回结果为准。',
+          '因模型切换、上游价格调整、汇率变化、运营策略调整或系统升级，本平台有权调整模型价格、倍率、套餐、赠送规则或计费方式。',
+          '用户充值时，应认真核对充值金额、到账额度、支付渠道、订单信息。',
+        ],
+      },
+      {
+        type: 'notice',
+        text: '除法律法规另有规定或本平台明确承诺外，已充值额度、已购买套餐、已使用服务原则上不支持无理由退款。',
+      },
+    ],
+  },
+  {
+    title: '订单与发票',
+    body: [
+      {
+        type: 'p',
+        text: '用户充值或购买服务后，本平台将生成相应订单记录，包括订单号、支付金额、到账额度、支付状态、支付渠道、下单时间、支付完成时间等信息。',
+      },
+      {
+        type: 'p',
+        text: '用户应妥善保存订单号，作为查询订单、核实充值、处理售后问题的重要凭证。',
+      },
+      {
+        type: 'p',
+        text: '如本平台支持开具发票，用户应按照页面要求提交真实、准确的开票信息。因用户提供信息错误导致无法开票、错票或延迟开票的，由用户自行承担责任。',
+      },
+    ],
+  },
+  {
+    title: '用户内容与责任',
+    body: [
+      {
+        type: 'ul',
+        items: [
+          '用户通过本平台提交的输入内容、上传数据、接口参数、业务数据以及基于 AI 模型生成的输出内容，由用户自行负责。',
+          '您应确保您对提交至本平台的内容享有合法权利，或已取得必要授权。',
+          '您不得上传、输入、生成、传播任何侵犯他人知识产权、隐私权、肖像权、名誉权、商业秘密或其他合法权益的内容。',
+          '如因您的输入内容、调用行为、生成内容或后续使用行为引发投诉、争议、处罚、索赔或损失，由您自行承担责任；本平台因此遭受损失的，有权向您追偿。',
+        ],
+      },
+    ],
+  },
+  {
+    title: '知识产权',
+    body: [
+      {
+        type: 'p',
+        text: '本平台的网站、界面、程序、文档、标识、商标、页面设计、技术方案、数据库、服务架构等相关知识产权归本平台或合法权利人所有。',
+      },
+      {
+        type: 'p',
+        text: '未经本平台书面同意，您不得复制、修改、传播、出售、出租、反向工程、反编译、抓取、镜像或以其他方式使用本平台相关内容。',
+      },
+      {
+        type: 'p',
+        text: '对于用户合法输入的内容，除法律法规另有规定或本协议另有约定外，其相关权利仍归用户或原权利人所有。',
+      },
+    ],
+  },
+  {
+    title: '服务变更、中断与终止',
+    body: [
+      {
+        type: 'ul',
+        items: [
+          '本平台可能因系统维护、服务器升级、网络故障、上游服务异常、支付通道异常、攻击事件、政策变化、不可抗力等原因导致服务中断、延迟、错误或不可用。',
+          '本平台将尽合理努力保障服务稳定，但不承诺服务永不中断、永不出错或满足您的全部业务需求。',
+          '如用户违反法律法规、本协议、平台规则或存在高风险行为，本平台有权视情况采取警告、限制功能、暂停调用、冻结额度、删除令牌、封禁账号、终止服务等措施。',
+        ],
+      },
+    ],
+  },
+  {
+    title: '免责声明',
+    body: [
+      {
+        type: 'ul',
+        items: [
+          '本平台不对 AI 输出内容的准确性、完整性、合法性、及时性、适用性作绝对保证。',
+          '因上游服务商故障、模型下线、接口变更、密钥失效、价格调整、网络波动、第三方支付异常等导致的服务异常，本平台将在合理范围内协助处理，但不承担超出法律规定和本协议约定范围的责任。',
+          '因用户自身原因造成的损失，包括但不限于账号泄露、令牌泄露、误操作、错误配置、违规调用、未及时查看通知等，由用户自行承担。',
+          '对于不可抗力、政府行为、法律法规变化、监管要求、黑客攻击、网络故障、基础设施故障等非本平台合理控制范围内的原因造成的损失，本平台不承担责任，但将尽合理努力减少影响。',
+        ],
+      },
+    ],
+  },
+  {
+    title: '通知',
+    body: [
+      {
+        type: 'p',
+        text: '本平台可通过站内通知、公告、弹窗、短信、邮件、控制台提示或您预留的联系方式向您发送服务通知、订单通知、安全通知、规则变更通知等。',
+      },
+      {
+        type: 'p',
+        text: '您应确保联系方式真实有效。如因联系方式无效、未及时查看通知或屏蔽通知导致损失，由您自行承担。',
+      },
+    ],
+  },
+  {
+    title: '协议变更',
+    body: [
+      {
+        type: 'p',
+        text: '本平台有权根据法律法规变化、业务调整、服务升级或运营需要修改本协议。修改后的协议将在平台页面公布，并自公布的生效日期起生效。',
+      },
+      {
+        type: 'p',
+        text: '如您不同意修改后的协议，应停止使用本平台服务。您在协议更新后继续使用本平台服务的，视为您已接受更新后的协议。',
+      },
+    ],
+  },
+  {
+    title: '法律适用与争议解决',
+    body: [
+      {
+        type: 'p',
+        text: '本协议的订立、履行、解释及争议解决，适用中华人民共和国大陆地区法律。',
+      },
+      {
+        type: 'p',
+        text: <>因本协议或本平台服务产生的争议，双方应友好协商解决；协商不成的，任一方可向 <Placeholder>【争议管辖法院】</Placeholder> 提起诉讼。</>,
+      },
+    ],
+  },
+  {
+    title: '联系我们',
+    body: [
+      {
+        type: 'ul',
+        items: [
+          <>运营主体：<Placeholder>【运营主体名称】</Placeholder></>,
+          <>联系邮箱：<Placeholder>【联系邮箱】</Placeholder></>,
+          <>客服电话：<Placeholder>【客服电话】</Placeholder></>,
+          <>网站域名：<Placeholder>【网站域名】</Placeholder></>,
+        ],
+      },
+    ],
+  },
+]
+
+function renderBody(block: Section['body'][number], index: number) {
+  if (block.type === 'h3') {
+    return <h3 key={index} style={styles.h3}>{block.text}</h3>
+  }
+  if (block.type === 'ul') {
+    return (
+      <ul key={index} style={styles.ul}>
+        {block.items.map((item, i) => (
+          <li key={i} style={styles.li}>{item}</li>
+        ))}
+      </ul>
+    )
+  }
+  if (block.type === 'notice') {
+    return <div key={index} style={styles.notice}>{block.text}</div>
+  }
+  return <p key={index} style={styles.p}>{block.text}</p>
+}
+
+function LegalPage({ kind }: { kind: LegalKind }) {
+  const isPrivacy = kind === 'privacy'
+  const title = isPrivacy ? '隐私政策' : '用户协议'
+  const desc = isPrivacy
+    ? '我们重视您的个人信息保护。本页面说明平台在账号、充值支付、API 调用、日志、安全风控和客户服务等场景中如何收集、使用、保存和保护相关信息。'
+    : '在您注册、登录、点击同意、充值、创建令牌、调用接口或以其他方式使用 FeiXiangApi 服务前，请仔细阅读并充分理解本协议全部内容。'
+  const sections = isPrivacy ? privacySections : agreementSections
+  const otherPath = isPrivacy ? '/user-agreement' : '/privacy-policy'
+  const otherText = isPrivacy ? '用户协议' : '隐私政策'
+
+  return (
+    <div style={styles.page}>
+      <main style={styles.shell}>
+        <section style={styles.hero}>
+          <div style={styles.heroBubble} />
+          <p style={styles.eyebrow}>Legal Document</p>
+          <h1 style={styles.title}>{title}</h1>
+          <p style={styles.desc}>{desc}</p>
+          <div style={styles.actions}>
+            <a style={styles.button} href="/">返回首页</a>
+            <a style={{ ...styles.button, ...styles.buttonPrimary }} href={otherPath}>{otherText}</a>
+          </div>
+          <div style={styles.metaGrid}>
+            <div style={styles.metaCard}>
+              <div style={styles.metaLabel}>平台名称</div>
+              <div style={styles.metaValue}>{SITE_NAME}</div>
+            </div>
+            <div style={styles.metaCard}>
+              <div style={styles.metaLabel}>最后更新日期</div>
+              <div style={styles.metaValue}>{UPDATED_AT}</div>
+            </div>
+            <div style={styles.metaCard}>
+              <div style={styles.metaLabel}>生效日期</div>
+              <div style={styles.metaValue}>{EFFECTIVE_AT}</div>
+            </div>
+          </div>
+        </section>
+
+        <section style={styles.layout}>
+          <aside style={styles.toc}>
+            <p style={styles.tocTitle}>目录</p>
+            {sections.map((section, index) => (
+              <a
+                key={section.title}
+                style={styles.tocLink}
+                href={`#legal-section-${index + 1}`}
+              >
+                {index + 1}. {section.title}
+              </a>
+            ))}
+          </aside>
+
+          <article style={styles.content}>
+            <section style={styles.card}>
+              <h2 style={styles.sectionTitle}>
+                <span style={styles.index}>!</span>
+                阅读提示
+              </h2>
+              <p style={styles.p}>
+                本页面仅控制用户协议和隐私政策正文样式，不覆盖站点顶部导航、首页、控制台或其他公共布局样式。
+              </p>
+              <div style={styles.notice}>
+                本文档中的 <Placeholder>【运营主体名称】</Placeholder>、<Placeholder>【联系邮箱】</Placeholder>、<Placeholder>【客服电话】</Placeholder>、<Placeholder>【网站域名】</Placeholder> 等字段请在正式上线前替换为真实信息，并建议交由专业法务最终确认。
+              </div>
+            </section>
+
+            {sections.map((section, index) => (
+              <section key={section.title} id={`legal-section-${index + 1}`} style={styles.card}>
+                <h2 style={styles.sectionTitle}>
+                  <span style={styles.index}>{index + 1}</span>
+                  {section.title}
+                </h2>
+                {section.body.map(renderBody)}
+              </section>
+            ))}
+
+            <footer style={styles.footer}>
+              © 2026 {SITE_NAME}. 本页面为法律文档展示页，请以网站正式发布版本为准。
+            </footer>
+          </article>
+        </section>
+      </main>
+    </div>
+  )
+}
+
+export function PrivacyPolicyPage() {
+  return <LegalPage kind="privacy" />
+}
+
+export function UserAgreementPage() {
+  return <LegalPage kind="agreement" />
+}
+
+export { LegalPage }
+
